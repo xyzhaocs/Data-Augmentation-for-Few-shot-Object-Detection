@@ -90,13 +90,15 @@ class Instance:
             int(self.y * img_height - h / 2) : int(self.y * img_height + h / 2),
             int(self.x * img_width - w / 2) : int(self.x * img_width + w / 2),
         ]
+        scale = (
+            CONFIG.min_scale + (CONFIG.max_scale - CONFIG.min_scale) * random.random()
+        )
+        h, w = h * scale, w * scale
         if h >= CONFIG.height or w >= CONFIG.width:
             while h >= CONFIG.height or w >= CONFIG.width:
                 h /= 2
                 w /= 2
-            return cv2.resize(instance, (int(w), int(h)))
-        else:
-            return instance
+        return cv2.resize(instance, (int(w), int(h)))
 
 
 class InstanceDict:
@@ -174,9 +176,58 @@ class Canvas:
         else:
             return False
 
-        self.name += f"_{instance.tag}_{x}_{y}_{w}_{h}"
+        if len(self.name) < 128:
+            self.name += f"_{instance.tag}_{x}_{y}_{w}_{h}"
         self.instances.append((x, y, w, h))
         self.canvas[y : y + h, x : x + w] = img_instance
+
+        border = CONFIG.border / 2
+
+        def blur_x(x):
+            self.canvas[
+                y : y + h,
+                max(0, x - int(border * w)) : min(canvas_width, x + int(border * w)),
+            ] = np.repeat(
+                np.mean(
+                    self.canvas[
+                        y : y + h,
+                        max(0, x - int(border * w)) : min(
+                            canvas_width, x + int(border * w)
+                        ),
+                    ],
+                    axis=1,
+                    keepdims=True,
+                ),
+                min(canvas_width, x + int(border * w)) - max(0, x - int(border * w)),
+                axis=1,
+            )
+
+        def blur_y(y):
+            self.canvas[
+                max(0, y - int(int(border * h))) : min(
+                    canvas_height, y + int(int(border * h))
+                ),
+                x : x + w,
+            ] = np.repeat(
+                np.mean(
+                    self.canvas[
+                        max(0, y - int(border * h)) : min(
+                            canvas_height, y + int(border * h)
+                        ),
+                        x : x + w,
+                    ],
+                    axis=0,
+                    keepdims=True,
+                ),
+                min(canvas_height, y + int(border * h)) - max(0, y - int(border * h)),
+                axis=0,
+            )
+
+        blur_x(x)
+        blur_x(x + w)
+        blur_y(y)
+        blur_y(y + h)
+
         self.limitation -= 1
         self.tags.append(instance.tag)
         return True
@@ -232,5 +283,8 @@ if __name__ == "__main__":
     )
     instance_dict = InstanceDict(new_dataset)
     new_distribution = instance_dict.distribution()
-        
-    print("Distribution before augmentation: ", [(t1[0],t1[1]+t2[1]) for t1, t2 in zip(distribution, new_distribution)])
+
+    print(
+        "Distribution before augmentation: ",
+        [(t1[0], t1[1] + t2[1]) for t1, t2 in zip(distribution, new_distribution)],
+    )
