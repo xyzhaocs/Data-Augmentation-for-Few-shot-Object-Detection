@@ -231,5 +231,6 @@ if __name__ == "__main__":
         os.path.join(CONFIG.output_path, "labels"),
     )
     instance_dict = InstanceDict(new_dataset)
-    distribution = instance_dict.distribution()
-    print("Distribution before augmentation: ", distribution)
+    new_distribution = instance_dict.distribution()
+        
+    print("Distribution before augmentation: ", [(t1[0],t1[1]+t2[1]) for t1, t2 in zip(distribution, new_distribution)])
