@@ -1,12 +1,10 @@
-from functools import cache
 import cv2
-import numpy as np
 import random
 import os
-import math
 import yaml
 import sys
 from collections import defaultdict
+from functools import cache
 
 
 class Config:
@@ -63,7 +61,7 @@ class DataSet:
         return self.getImage(index), self.getLabel(index)
 
     def __len__(self):
-        return len(os.listdir(self.image_path))
+        return len(self.images)
 
 
 class Instance:
@@ -81,7 +79,6 @@ class Instance:
         self.index = index
         self.dataset = dataset
 
-    @cache
     def get(self):
         image = dataset.getImage(self.index)
         img_height, img_width, _ = image.shape
@@ -94,10 +91,9 @@ class Instance:
             CONFIG.min_scale + (CONFIG.max_scale - CONFIG.min_scale) * random.random()
         )
         h, w = h * scale, w * scale
-        if h >= CONFIG.height or w >= CONFIG.width:
-            while h >= CONFIG.height or w >= CONFIG.width:
-                h /= 2
-                w /= 2
+        while h >= CONFIG.height or w >= CONFIG.width:
+            h /= 2
+            w /= 2
         return cv2.resize(instance, (int(w), int(h)))
 
 
@@ -179,55 +175,9 @@ class Canvas:
         if len(self.name) < 128:
             self.name += f"_{instance.tag}_{x}_{y}_{w}_{h}"
         self.instances.append((x, y, w, h))
-        self.canvas[y : y + h, x : x + w] = img_instance
-
-        border = CONFIG.border / 2
-
-        def blur_x(x):
-            self.canvas[
-                y : y + h,
-                max(0, x - int(border * w)) : min(canvas_width, x + int(border * w)),
-            ] = np.repeat(
-                np.mean(
-                    self.canvas[
-                        y : y + h,
-                        max(0, x - int(border * w)) : min(
-                            canvas_width, x + int(border * w)
-                        ),
-                    ],
-                    axis=1,
-                    keepdims=True,
-                ),
-                min(canvas_width, x + int(border * w)) - max(0, x - int(border * w)),
-                axis=1,
-            )
-
-        def blur_y(y):
-            self.canvas[
-                max(0, y - int(int(border * h))) : min(
-                    canvas_height, y + int(int(border * h))
-                ),
-                x : x + w,
-            ] = np.repeat(
-                np.mean(
-                    self.canvas[
-                        max(0, y - int(border * h)) : min(
-                            canvas_height, y + int(border * h)
-                        ),
-                        x : x + w,
-                    ],
-                    axis=0,
-                    keepdims=True,
-                ),
-                min(canvas_height, y + int(border * h)) - max(0, y - int(border * h)),
-                axis=0,
-            )
-
-        blur_x(x)
-        blur_x(x + w)
-        blur_y(y)
-        blur_y(y + h)
-
+        self.canvas = cv2.seamlessClone(
+            img_instance, self.canvas, None, (x + w // 2, y + h // 2), cv2.MIXED_CLONE
+        )
         self.limitation -= 1
         self.tags.append(instance.tag)
         return True

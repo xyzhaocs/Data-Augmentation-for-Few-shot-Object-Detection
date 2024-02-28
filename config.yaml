@@ -3,10 +3,9 @@ label_path: "dataset/before/labels/train"
 background_path: "dataset/coco128/images/train2017"
 output_path: "dataset/output"
 target_instances_per_class: 500
-min_instances: 100
-max_instances: 1000
+min_instances: 2
+max_instances: 10
 width: 960
 height: 768
 min_scale: 0.5
 max_scale: 5.0
-border: 0.05
