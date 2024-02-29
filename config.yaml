@@ -9,3 +9,4 @@ width: 960
 height: 768
 min_scale: 0.5
 max_scale: 5.0
+val_ratio: 0.2

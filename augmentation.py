@@ -5,7 +5,7 @@ import yaml
 import sys
 from collections import defaultdict
 from functools import cache
-
+import shutil
 
 class Config:
     def __init__(self, config: dict):
@@ -238,3 +238,52 @@ if __name__ == "__main__":
         "Distribution before augmentation: ",
         [(t1[0], t1[1] + t2[1]) for t1, t2 in zip(distribution, new_distribution)],
     )
+    
+    total_size = len(instance_dict)
+    
+    if CONFIG.val_ratio == -1 :
+        print(f"The size of newDataSet: {total_size}")
+        sys.exit()
+
+    images_path=os.path.join(CONFIG.output_path, "images")
+    labels_path=os.path.join(CONFIG.output_path, "labels")
+    train_images_path=os.path.join(CONFIG.output_path, "images", "train")
+    val_images_path=os.path.join(CONFIG.output_path, "images", "val")
+    train_labels_path=os.path.join(CONFIG.output_path, "labels", "train")
+    val_labels_path=os.path.join(CONFIG.output_path, "labels", "val")
+    
+    if os.path.exists(train_images_path) == False:
+        os.makedirs(train_images_path)
+    if os.path.exists(val_images_path) == False:
+        os.makedirs(val_images_path)
+    if os.path.exists(train_labels_path) == False:
+        os.makedirs(train_labels_path)
+    if os.path.exists(val_labels_path) == False:
+        os.makedirs(val_labels_path)
+        
+    # 获取所有图像文件和标签文件
+    images_files = [f for f in os.listdir(os.path.join(images_path, "img")) if f.endswith(".jpg")]
+    labels_files = [f for f in os.listdir(os.path.join(labels_path, "label")) if f.endswith(".txt")]
+
+    # 计算训练集和验证集大小
+    val_size =  int(total_size * CONFIG.val_ratio)
+    train_size = total_size - val_size
+    
+    # 随机选择验证集的图像文件和标签文件
+    val_image_files = random.sample(images_files, val_size)
+    val_label_files = [f.replace(".jpg", ".txt") for f in val_image_files]
+
+    # 将验证集文件移动到验证集目录
+    for val_image_file, val_label_file in zip(val_image_files, val_label_files):
+        shutil.copy(os.path.join(images_path, val_image_file), os.path.join(val_images_path, val_image_file))
+        shutil.copy(os.path.join(labels_path, val_label_file), os.path.join(val_labels_path, val_label_file))
+
+    train_image_files = [x for x in images_files if x not in val_image_files]
+    train_label_files = [x for x in labels_files if x not in val_label_files]
+
+    # 将剩余的文件移动到训练集目录
+    for train_image_file, train_label_file in zip(train_image_files, train_label_files):
+        shutil.copy(os.path.join(images_path, train_image_file), os.path.join(train_images_path, train_image_file))
+        shutil.copy(os.path.join(labels_path, train_label_file), os.path.join(train_labels_path, train_label_file))
+    print(f"The size of newDataSet: {total_size}\n',
+          '{len(train_label_files)} for Train, {len(val_label_files)} for Validation")
