@@ -176,7 +176,7 @@ class Canvas:
             self.name += f"_{instance.tag}_{x}_{y}_{w}_{h}"
         self.instances.append((x, y, w, h))
         self.canvas = cv2.seamlessClone(
-            img_instance, self.canvas, None, (x + w // 2, y + h // 2), cv2.MIXED_CLONE
+            img_instance, self.canvas, None, (x + w // 2, y + h // 2), cv2.NORMAL_CLONE
         )
         self.limitation -= 1
         self.tags.append(instance.tag)
@@ -205,6 +205,67 @@ class CanvasManagement:
             self.canvas.save()
             self.canvas = Canvas()
 
+class Spliter():
+    def __init__(self, dataset: DataSet, val_ratio: float) -> None:
+        self.total_size=len(dataset)
+        self.val_ratio=val_ratio
+        self.images_path=dataset.image_path
+        self.labels_path=dataset.label_path
+        self.train_images_path=os.path.join(self.images_path, "train")
+        self.val_images_path=os.path.join(self.images_path, "val")
+        self.train_labels_path=os.path.join(self.labels_path, "train")
+        self.val_labels_path=os.path.join(self.labels_path, "val")
+        
+        if os.path.exists(self.train_images_path) == False:
+            os.makedirs(self.train_images_path)
+        if os.path.exists(self.val_images_path) == False:
+            os.makedirs(self.val_images_path)
+        if os.path.exists(self.train_labels_path) == False:
+            os.makedirs(self.train_labels_path)
+        if os.path.exists(self.val_labels_path) == False:
+            os.makedirs(self.val_labels_path)
+        
+        # 获取所有图像文件和标签文件
+        self.images_files = [f for f in os.listdir(self.images_path) if f.endswith(".jpg")]
+        self.labels_files = [f for f in os.listdir(self.labels_path) if f.endswith(".txt")]
+
+    def split(self):
+        # 计算训练集和验证集大小
+        self.val_size =  int(self.total_size * self.val_ratio)
+        self.train_size = self.total_size - self.val_size
+        
+        # 随机选择验证集的图像文件和标签文件
+        val_image_files = random.sample(self.images_files, self.val_size)
+        val_label_files = [f.replace(".jpg", ".txt") for f in val_image_files]
+        # 剩下文件即为训练集
+        train_image_files = [x for x in self.images_files if x not in val_image_files]
+        train_label_files = [x for x in self.labels_files if x not in val_label_files]
+
+        if CONFIG.use_tqdm:
+            # 将训练集文件移动到训练集目录
+            for train_image_file, train_label_file in tqdm(zip(train_image_files, train_label_files), desc="Split Train Set... ", unit="(jpg+txt)"):
+                shutil.move(os.path.join(self.images_path, train_image_file), os.path.join(self.train_images_path, train_image_file))
+                shutil.move(os.path.join(self.labels_path, train_label_file), os.path.join(self.train_labels_path, train_label_file))
+            # 将验证集文件移动到验证集目录
+            for val_image_file, val_label_file in tqdm(zip(val_image_files, val_label_files), desc="Split Validation Set... ", unit="(jpg+txt)"):
+                shutil.move(os.path.join(self.images_path, val_image_file), os.path.join(self.val_images_path, val_image_file))
+                shutil.move(os.path.join(self.labels_path, val_label_file), os.path.join(self.val_labels_path, val_label_file))
+        else:
+            # 将训练集文件移动到训练集目录
+            for train_image_file, train_label_file in zip(train_image_files, train_label_files):
+                shutil.move(os.path.join(self.images_path, train_image_file), os.path.join(self.train_images_path, train_image_file))
+                shutil.move(os.path.join(self.labels_path, train_label_file), os.path.join(self.train_labels_path, train_label_file))
+            # 将验证集文件移动到验证集目录
+            for val_image_file, val_label_file in zip(val_image_files, val_label_files):
+                shutil.move(os.path.join(self.images_path, val_image_file), os.path.join(self.val_images_path, val_image_file))
+                shutil.move(os.path.join(self.labels_path, val_label_file), os.path.join(self.val_labels_path, val_label_file))
+        
+        return self.train_size, self.val_size
+
+    def __len__(self):
+        return self.total_size
+
+
 
 if __name__ == "__main__":
 
@@ -224,8 +285,13 @@ if __name__ == "__main__":
     print("Distribution before augmentation: ", distribution)
 
     manager = CanvasManagement()
-    for instance in instance_dict.get_instances():
-        manager.add_instance(instance)
+    if CONFIG.use_tqdm:
+        from tqdm import tqdm
+        for instance in tqdm(instance_dict.get_instances(), desc="Generating... ", unit="instance"):
+            manager.add_instance(instance)
+    else:
+        for instance in instance_dict.get_instances():
+            manager.add_instance(instance)
 
     new_dataset = DataSet(
         os.path.join(CONFIG.output_path, "images"),
@@ -239,51 +305,14 @@ if __name__ == "__main__":
         [(t1[0], t1[1] + t2[1]) for t1, t2 in zip(distribution, new_distribution)],
     )
     
-    total_size = len(instance_dict)
+    total_size = len(new_dataset)
     
     if CONFIG.val_ratio == -1 :
         print(f"The size of newDataSet: {total_size}")
         sys.exit()
 
-    images_path=os.path.join(CONFIG.output_path, "images")
-    labels_path=os.path.join(CONFIG.output_path, "labels")
-    train_images_path=os.path.join(CONFIG.output_path, "images", "train")
-    val_images_path=os.path.join(CONFIG.output_path, "images", "val")
-    train_labels_path=os.path.join(CONFIG.output_path, "labels", "train")
-    val_labels_path=os.path.join(CONFIG.output_path, "labels", "val")
+    spliter = Spliter(new_dataset, CONFIG.val_ratio)
+    train_size, val_size = spliter.split()
     
-    if os.path.exists(train_images_path) == False:
-        os.makedirs(train_images_path)
-    if os.path.exists(val_images_path) == False:
-        os.makedirs(val_images_path)
-    if os.path.exists(train_labels_path) == False:
-        os.makedirs(train_labels_path)
-    if os.path.exists(val_labels_path) == False:
-        os.makedirs(val_labels_path)
-        
-    # 获取所有图像文件和标签文件
-    images_files = [f for f in os.listdir(os.path.join(images_path, "img")) if f.endswith(".jpg")]
-    labels_files = [f for f in os.listdir(os.path.join(labels_path, "label")) if f.endswith(".txt")]
-
-    # 计算训练集和验证集大小
-    val_size =  int(total_size * CONFIG.val_ratio)
-    train_size = total_size - val_size
-    
-    # 随机选择验证集的图像文件和标签文件
-    val_image_files = random.sample(images_files, val_size)
-    val_label_files = [f.replace(".jpg", ".txt") for f in val_image_files]
-
-    # 将验证集文件移动到验证集目录
-    for val_image_file, val_label_file in zip(val_image_files, val_label_files):
-        shutil.copy(os.path.join(images_path, val_image_file), os.path.join(val_images_path, val_image_file))
-        shutil.copy(os.path.join(labels_path, val_label_file), os.path.join(val_labels_path, val_label_file))
-
-    train_image_files = [x for x in images_files if x not in val_image_files]
-    train_label_files = [x for x in labels_files if x not in val_label_files]
-
-    # 将剩余的文件移动到训练集目录
-    for train_image_file, train_label_file in zip(train_image_files, train_label_files):
-        shutil.copy(os.path.join(images_path, train_image_file), os.path.join(train_images_path, train_image_file))
-        shutil.copy(os.path.join(labels_path, train_label_file), os.path.join(train_labels_path, train_label_file))
-    print(f"The size of newDataSet: {total_size}\n',
-          '{len(train_label_files)} for Train, {len(val_label_files)} for Validation")
+    print(f'The size of newDataSet: {total_size}, ',
+          f'{train_size} for Train, {val_size} for Validation.')
