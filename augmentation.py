@@ -87,6 +87,8 @@ class Instance:
             int(self.y * img_height - h / 2) : int(self.y * img_height + h / 2),
             int(self.x * img_width - w / 2) : int(self.x * img_width + w / 2),
         ]
+        if 0 in instance.shape:
+            return self.get()
         scale = (
             CONFIG.min_scale + (CONFIG.max_scale - CONFIG.min_scale) * random.random()
         )
@@ -301,7 +303,7 @@ if __name__ == "__main__":
     new_distribution = instance_dict.distribution()
 
     print(
-        "Distribution before augmentation: ",
+        "Distribution after augmentation: ",
         [(t1[0], t1[1] + t2[1]) for t1, t2 in zip(distribution, new_distribution)],
     )
     
